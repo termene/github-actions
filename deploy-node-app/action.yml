@@ -1,0 +1,105 @@
+name: 'Deploy Node.js App'
+description: 'Deploy a Node.js application via SSH with artifact extraction and PM2 management'
+
+inputs:
+  ssh_host:
+    description: 'SSH host to deploy to'
+    required: true
+  ssh_username:
+    description: 'SSH username'
+    required: true
+    default: 'github'
+  ssh_key:
+    description: 'SSH private key'
+    required: true
+  app_name:
+    description: 'Application name'
+    required: true
+  deploy_path:
+    description: 'Deployment path on server'
+    required: false
+    default: '/home/github'
+  artifact_path:
+    description: 'Path to artifact file'
+    required: true
+  commit_sha:
+    description: 'Commit SHA or tag to checkout'
+    required: true
+  use_tags:
+    description: 'Whether to fetch tags instead of commits'
+    required: false
+    default: 'false'
+  node_version:
+    description: 'Node.js version to use'
+    required: false
+    default: '22.21.0'
+  pm2_action:
+    description: 'PM2 action: restart, reload, skip'
+    required: false
+    default: 'skip'
+  pm2_app_name:
+    description: 'PM2 application name'
+    required: false
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Deploy via SSH
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ inputs.ssh_host }}
+        username: ${{ inputs.ssh_username }}
+        key: ${{ inputs.ssh_key }}
+        port: 22
+        script: |
+          set -e
+          
+          n ls && node -v && npm -v
+          
+          APP="${{ inputs.app_name }}"
+          DEPLOY_PATH="${{ inputs.deploy_path }}/${APP}"
+          SHA="${{ inputs.commit_sha }}"
+          
+          echo "Deploying ${APP} (${SHA:0:8})..."
+          
+          mkdir -p "${DEPLOY_PATH}"
+          cd "${DEPLOY_PATH}"
+          
+          # Fetch and checkout (handles both commits and tags)
+          if [ "${{ inputs.use_tags }}" = "true" ]; then
+            echo "Fetching tags and checking out: ${SHA}"
+            git fetch --tags 2>&1
+            git reset --hard 2>&1
+            git checkout ${SHA} 2>&1
+          else
+            echo "Fetching commits and checking out: ${SHA}"
+            git fetch 2>&1
+            git reset --hard
+            git checkout ${SHA} 2>&1
+          fi
+          
+          # Extract artifact (keep existing .env, or other files ignored by CI)
+          tar -xzf ${{ inputs.artifact_path }} -C "${DEPLOY_PATH}"
+          
+          # Install dependencies
+          n exec ${{ inputs.node_version }} npm ci 2>&1
+          
+          # PM2 management
+          if [ "${{ inputs.pm2_action }}" = "restart" ]; then
+            pm2 restart ${{ inputs.pm2_app_name }} || pm2 start ecosystem.config.js
+            pm2 save
+            echo "✅ PM2 application restarted"
+          elif [ "${{ inputs.pm2_action }}" = "reload" ]; then
+            pm2 reload ${{ inputs.pm2_app_name }} || pm2 start ecosystem.config.js
+            pm2 save
+            echo "✅ PM2 application reloaded"
+          else
+            pm2 ls
+            echo "✅ PM2 app left in previous state. Start manually when needed"
+          fi
+          
+          # Cleanup
+          rm -f ${{ inputs.artifact_path }}
+          
+          echo "✅ ${APP} deployed successfully"
+

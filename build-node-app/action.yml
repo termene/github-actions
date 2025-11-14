@@ -1,0 +1,99 @@
+name: 'Build Node.js App'
+description: 'Test, lint, build and package a Node.js application'
+
+inputs:
+  node_version:
+    description: 'Node.js version to use'
+    required: false
+    default: '22.21.0'
+  app_name:
+    description: 'Application name for artifact'
+    required: true
+  commit_sha:
+    description: 'Commit SHA for artifact naming'
+    required: true
+  run_tests:
+    description: 'Whether to run tests'
+    required: false
+    default: 'true'
+  run_lint:
+    description: 'Whether to run linting'
+    required: false
+    default: 'true'
+  test_command:
+    description: 'Test command to run'
+    required: false
+    default: 'npm run test:cov --if-present'
+  lint_command:
+    description: 'Lint command to run'
+    required: false
+    default: 'npm run lint --if-present'
+  build_command:
+    description: 'Build command to run'
+    required: false
+    default: 'npm run build'
+  artifact_files:
+    description: 'Files/directories to include in artifact (space-separated)'
+    required: false
+    default: 'dist/ package.json package-lock.json ecosystem.config.js'
+  artifact_retention_days:
+    description: 'Number of days to retain artifact'
+    required: false
+    default: '30'
+
+outputs:
+  artifact_name:
+    description: 'Name of the uploaded artifact'
+    value: ${{ steps.artifact-info.outputs.name }}
+  artifact_path:
+    description: 'Path to the artifact file'
+    value: ${{ steps.artifact-info.outputs.path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node_version }}
+        cache: 'npm'
+        cache-dependency-path: package-lock.json
+
+    - name: Install dependencies
+      shell: bash
+      run: npm ci
+
+    - name: Lint
+      if: inputs.run_lint == 'true'
+      shell: bash
+      run: ${{ inputs.lint_command }}
+
+    - name: Test
+      if: inputs.run_tests == 'true'
+      shell: bash
+      run: ${{ inputs.test_command }}
+
+    - name: Build
+      shell: bash
+      run: ${{ inputs.build_command }}
+
+    - name: Package artifact
+      shell: bash
+      run: |
+        tar -czf ${{ inputs.app_name }}-${{ inputs.commit_sha }}.tar.gz \
+          ${{ inputs.artifact_files }}
+
+    - name: Set artifact info
+      id: artifact-info
+      shell: bash
+      run: |
+        echo "name=${{ inputs.app_name }}-${{ inputs.commit_sha }}" >> $GITHUB_OUTPUT
+        echo "path=${{ inputs.app_name }}-${{ inputs.commit_sha }}.tar.gz" >> $GITHUB_OUTPUT
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.app_name }}-${{ inputs.commit_sha }}
+        path: ${{ inputs.app_name }}-${{ inputs.commit_sha }}.tar.gz
+        retention-days: ${{ inputs.artifact_retention_days }}
+

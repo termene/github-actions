@@ -1,0 +1,65 @@
+name: 'Setup SSH'
+description: 'Setup SSH key and add hosts to known_hosts'
+
+inputs:
+  ssh_key:
+    description: 'SSH private key content'
+    required: true
+  ssh_key_path:
+    description: 'Path where to store SSH key'
+    required: false
+    default: '~/.ssh/deploy_key'
+  known_hosts:
+    description: 'Comma-separated list of hosts to add to known_hosts'
+    required: true
+  ssh_dir:
+    description: 'SSH directory path'
+    required: false
+    default: '~/.ssh'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Create SSH directory
+      shell: bash
+      run: |
+        mkdir -p ${{ inputs.ssh_dir }}
+        chmod 700 ${{ inputs.ssh_dir }}
+
+    - name: Setup SSH key
+      shell: bash
+      run: |
+        KEY_PATH="${{ inputs.ssh_key_path }}"
+        
+        # Create or update SSH key
+        if [ ! -e "${KEY_PATH}" ]; then
+          echo "${{ inputs.ssh_key }}" > "${KEY_PATH}"
+          chmod 600 "${KEY_PATH}"
+          echo "✅ SSH key created at ${KEY_PATH}"
+        else
+          echo "ℹ️  SSH key already exists at ${KEY_PATH}"
+        fi
+
+    - name: Add hosts to known_hosts
+      shell: bash
+      run: |
+        KNOWN_HOSTS_FILE="${{ inputs.ssh_dir }}/known_hosts"
+        
+        # Ensure known_hosts file exists
+        touch "${KNOWN_HOSTS_FILE}"
+        chmod 644 "${KNOWN_HOSTS_FILE}"
+        
+        # Process each host
+        IFS=',' read -ra HOSTS <<< "${{ inputs.known_hosts }}"
+        for host in "${HOSTS[@]}"; do
+          host=$(echo "$host" | xargs)  # trim whitespace
+          
+          if ! grep -q "${host}" "${KNOWN_HOSTS_FILE}" 2>/dev/null; then
+            echo "Adding ${host} to known_hosts..."
+            ssh-keyscan "${host}" >> "${KNOWN_HOSTS_FILE}" 2>/dev/null
+            echo "✅ ${host} added to known_hosts"
+          else
+            echo "ℹ️  ${host} already in known_hosts"
+          fi
+        done
+
