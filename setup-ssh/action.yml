@@ -23,13 +23,20 @@ runs:
     - name: Create SSH directory
       shell: bash
       run: |
-        mkdir -p ${{ inputs.ssh_dir }}
-        chmod 700 ${{ inputs.ssh_dir }}
+        SSH_DIR="${{ inputs.ssh_dir }}"
+        SSH_DIR="${SSH_DIR/#\~/$HOME}"
+        
+        mkdir -p "${SSH_DIR}"
+        chmod 700 "${SSH_DIR}"
 
     - name: Setup SSH key
       shell: bash
       run: |
         KEY_PATH="${{ inputs.ssh_key_path }}"
+        KEY_PATH="${KEY_PATH/#\~/$HOME}"
+        
+        # Ensure parent directory exists
+        mkdir -p "$(dirname "${KEY_PATH}")"
         
         # Create or update SSH key
         if [ ! -e "${KEY_PATH}" ]; then
@@ -43,7 +50,9 @@ runs:
     - name: Add hosts to known_hosts
       shell: bash
       run: |
-        KNOWN_HOSTS_FILE="${{ inputs.ssh_dir }}/known_hosts"
+        SSH_DIR="${{ inputs.ssh_dir }}"
+        SSH_DIR="${SSH_DIR/#\~/$HOME}"
+        KNOWN_HOSTS_FILE="${SSH_DIR}/known_hosts"
         
         # Ensure known_hosts file exists
         touch "${KNOWN_HOSTS_FILE}"
