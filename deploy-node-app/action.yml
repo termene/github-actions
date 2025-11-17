@@ -67,6 +67,9 @@ runs:
           
           # Fetch and checkout (handles both commits and tags)
           if [ "${{ inputs.use_tags }}" = "true" ]; then
+            # ensure current tag is not somehow already checked out (happens on git push origin -f tag)
+            git tag -d ${SHA} 2>/dev/null || true
+          
             echo "Fetching tags and checking out: ${SHA}"
             git fetch --tags 2>&1
             git reset --hard 2>&1
