@@ -74,11 +74,13 @@ runs:
             git fetch --tags 2>&1
             git reset --hard 2>&1
             git checkout ${SHA} 2>&1
+            git pull origin ${SHA}
           else
             echo "Fetching commits and checking out: ${SHA}"
             git fetch 2>&1
             git reset --hard
             git checkout ${SHA} 2>&1
+            git pull origin ${SHA}
           fi
           
           # Extract artifact (keep existing .env, or other files ignored by CI)

@@ -154,6 +154,13 @@ jobs:
 git submodule add https://github.com/your-org/github-actions .github/actions
 ```
 
+### Updating
+```bash
+#
+git tag -fa v1 -m "Update deploy-node-app action"
+git push origin v1 --force
+```
+
 ## Benefits
 
 ✅ **DRY** - Don't repeat deployment logic  
